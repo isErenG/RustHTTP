@@ -1,6 +1,9 @@
+mod reader;
+mod utils;
+use crate::utils::print_request;
 use std::collections::HashMap;
 use std::io;
-use std::io::Read;
+use std::io::BufRead;
 use std::net::{TcpListener, TcpStream};
 
 fn main() {
@@ -20,52 +23,29 @@ fn main() {
     }
 }
 
-fn print_request(mut s: TcpStream) {
-    let headers = get_headers(&mut s);
-    let payload = get_payload(
-        &mut s,
-        headers.get("Content-Length").unwrap().parse().unwrap(),
-    );
-
-    println!("{:?} {}", headers, payload);
-}
-
-fn get_headers(s: &mut TcpStream) -> HashMap<String, String> {
+fn get_headers(reader: &mut impl BufRead) -> HashMap<String, String> {
     let mut headers_map = HashMap::new();
-
-    let mut buf = [0; 10];
-    let mut chunks: Vec<u8> = Vec::new();
+    let mut line = String::new();
 
     loop {
-        let bytes_read = s.read(&mut buf).unwrap();
-        chunks.extend_from_slice(&buf[0..bytes_read]);
-
-        if chunks.windows(4).any(|w| w == b"\r\n\r\n") {
-            break;
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        if line == "\r\n" {
+            break; // blank line = end of headers
         }
-    }
-
-    let header_str = String::from_utf8_lossy(&chunks).to_string();
-
-    header_str.split("\r\n").for_each(|header| {
-        let parts: Vec<&str> = header.splitn(2, ": ").collect();
-
+        let parts: Vec<&str> = line.trim_end().splitn(2, ": ").collect();
         if parts.len() == 2 {
             headers_map.insert(parts[0].to_string(), parts[1].to_string());
         }
-    });
+    }
 
-    return headers_map;
+    headers_map
 }
 
-fn get_payload(s: &mut TcpStream, content_length: u32) -> String {
-    let payload: String;
-
+fn get_payload(reader: &mut impl BufRead, content_length: u32) -> String {
     let mut buf = vec![0u8; content_length as usize];
 
-    s.read_exact(&mut buf).unwrap();
+    reader.read_exact(&mut buf).unwrap();
 
-    payload = String::from_utf8_lossy(&buf).to_string();
-
-    return payload;
+    String::from_utf8_lossy(&buf).to_string()
 }
