@@ -1,18 +1,22 @@
 use crate::reader::CustomReader;
 use crate::schemas::*;
 use std::collections::HashMap;
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 use std::net::TcpStream;
 
-pub fn parse_http(s: TcpStream) -> Request {
+pub fn parse_http(s: &mut TcpStream) -> Request {
     let mut reader = CustomReader::new(s);
 
     let (method, path) = get_request_line(&mut reader);
     let headers = get_headers(&mut reader);
-    let payload = get_payload(
-        &mut reader,
-        headers.get("Content-Length").unwrap().parse().unwrap(),
-    );
+
+    let mut payload = Option::None;
+    if method == RequestMethod::POST {
+        payload = Option::from(get_payload(
+            &mut reader,
+            headers.get("Content-Length").unwrap().parse().unwrap(),
+        ));
+    }
 
     Request::new(path, method, headers, payload)
 }
@@ -22,15 +26,10 @@ fn get_request_line(reader: &mut impl BufRead) -> (RequestMethod, String) {
     reader.read_line(&mut line).unwrap();
 
     let split_line: Vec<_> = line.splitn(3, " ").collect();
-
     match split_line[0] {
-        "GET" => {
-            return (RequestMethod::GET, split_line[1].parse().unwrap());
-        }
-        "POST" => {
-            return (RequestMethod::POST, split_line[1].parse().unwrap());
-        }
-        Option => panic!("yo tf"),
+        "GET" => (RequestMethod::GET, split_line[1].parse().unwrap()),
+        "POST" => (RequestMethod::POST, split_line[1].parse().unwrap()),
+        _ => panic!("yo tf"),
     }
 }
 
