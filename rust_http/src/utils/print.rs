@@ -1,14 +1,5 @@
-use std::net::TcpStream;
-use crate::{get_headers, get_payload};
-use crate::reader::CustomReader;
+use crate::schemas::Request;
 
-pub fn print_request(s: TcpStream) {
-    let mut reader = CustomReader::new(s);
-    let headers = get_headers(&mut reader);
-    let payload = get_payload(
-        &mut reader,
-        headers.get("Content-Length").unwrap().parse().unwrap(),
-    );
-
-    println!("{:?} {}", headers, payload);
+pub fn print_request(request: &Request) {
+    println!("{}", request);
 }
