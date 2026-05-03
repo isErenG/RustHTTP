@@ -5,10 +5,10 @@ use std::io::Read;
 use std::ops::{Deref, DerefMut};
 
 pub struct Request {
-    path: String,
-    request_method: RequestMethod,
-    headers: HashMap<String, String>,
-    body: Option<String>,
+    pub path: String,
+    pub request_method: RequestMethod,
+    pub headers: HashMap<String, String>,
+    pub body: Option<String>,
 }
 
 impl Request {
