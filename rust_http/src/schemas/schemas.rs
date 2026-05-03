@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Error;
-use std::io::Read;
-use std::ops::{Deref, DerefMut};
 
 pub struct Request {
     pub path: String,

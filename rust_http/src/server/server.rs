@@ -1,4 +1,3 @@
-use crate::handler::RequestHandler;
 use crate::http::parse_http;
 use crate::schemas::{RequestMethod, Response, StatusCode};
 use std::collections::HashMap;
@@ -8,7 +7,7 @@ use std::net::TcpListener;
 
 pub struct Server {
     listener: TcpListener,
-    handlers: HashMap<String, Box<dyn RequestHandler>>,
+    handlers: HashMap<String, Box<dyn Fn() -> Response>>,
 }
 
 impl Server {
@@ -25,10 +24,10 @@ impl Server {
         &mut self,
         method: RequestMethod,
         path: String,
-        handler: impl RequestHandler + 'static,
+        handler: Box<dyn Fn() -> Response>,
     ) {
         let key = format!("{}:{}", method, path);
-        self.handlers.insert(key, Box::new(handler));
+        self.handlers.insert(key, handler);
     }
 
     pub fn listen(&mut self) {
@@ -50,7 +49,7 @@ impl Server {
 
                     let handler = self.handlers.get(&key);
 
-                    let response = handler.unwrap().handle();
+                    let response = handler.unwrap()();
 
                     s.write_all(&response.to_bytes()).unwrap();
                 }
