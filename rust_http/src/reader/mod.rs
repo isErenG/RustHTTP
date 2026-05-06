@@ -1,2 +1,2 @@
 mod reader;
-pub use reader::CustomReader;
+pub use reader::CustomAsyncReader;

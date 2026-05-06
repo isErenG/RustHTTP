@@ -14,9 +14,16 @@ fn handle() -> Response {
     headers.insert("Connection".to_string(), "close".to_string());
     Response::new(StatusCode::Ok, headers, Some("Hello\n".to_string()))
 }
+#[tokio::main]
+async fn main() {
+    let mut server = Server::create_server(7878).await;
 
-fn main() {
-    let mut server = Server::create_server(7878);
+    server.attach_middleware(Box::new(|| {
+        Box::pin(async {
+            println!("Middleware running!");
+        })
+    }));
+
     server.attach_handler(RequestMethod::GET, "/test".to_string(), Box::new(handle));
-    server.listen()
+    server.listen().await;
 }
