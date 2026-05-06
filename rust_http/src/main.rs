@@ -5,6 +5,7 @@ mod schemas;
 mod server;
 mod utils;
 
+use crate::handler::Handler;
 use crate::schemas::{RequestMethod, Response, StatusCode};
 use crate::server::Server;
 use std::collections::HashMap;
@@ -24,6 +25,20 @@ async fn main() {
         })
     }));
 
-    server.attach_handler(RequestMethod::GET, "/test".to_string(), Box::new(handle));
-    server.listen().await;
+    let api_get_handler = Handler::create(
+        RequestMethod::GET,
+        "/api".to_string(),
+        Box::new(|| {
+            let mut headers = HashMap::new();
+            headers.insert("Connection".to_string(), "close".to_string());
+            Response::new(
+                StatusCode::Ok,
+                headers,
+                Some("this is an API!\n".to_string()),
+            )
+        }),
+    );
+
+    server.attach_handler(api_get_handler);
+    server.listen().await
 }

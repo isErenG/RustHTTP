@@ -1,15 +1,13 @@
+use crate::handler::Handler;
 use crate::http::parse_http;
-use crate::schemas::{RequestMethod, Response, StatusCode};
-use std::collections::HashMap;
-use std::io;
-use std::io::Write;
-use std::pin::Pin;
+use crate::schemas::{Response, StatusCode};
+use std::{collections::HashMap, pin::Pin};
 use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 
 pub struct Server {
     listener: TcpListener,
-    handlers: HashMap<String, Box<dyn Fn() -> Response>>,
+    handlers: Vec<Handler>,
     middleware: Vec<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>>>>,
 }
 
@@ -22,7 +20,7 @@ impl Server {
 
         Server {
             listener,
-            handlers: HashMap::new(),
+            handlers: Vec::new(),
             middleware: Vec::new(),
         }
     }
@@ -31,14 +29,8 @@ impl Server {
         self.middleware.push(m);
     }
 
-    pub fn attach_handler(
-        &mut self,
-        method: RequestMethod,
-        path: String,
-        handler: Box<dyn Fn() -> Response>,
-    ) {
-        let key = format!("{}:{}", method, path);
-        self.handlers.insert(key, handler);
+    pub fn attach_handler(&mut self, handler: Handler) {
+        self.handlers.push(handler);
     }
 
     pub async fn listen(&mut self) {
@@ -48,7 +40,16 @@ impl Server {
             let request = parse_http(&mut s).await;
             let key = format!("{}:{}", request.request_method, request.path);
 
-            if !self.handlers.contains_key(&key) {
+            let mut method_handle: Option<&Handler> = None;
+            for handler in &self.handlers {
+                if handler.get_key() == key {
+                    method_handle = Some(handler);
+                    break;
+                }
+                method_handle = None;
+            }
+
+            if method_handle.is_none() {
                 let mut headers = HashMap::new();
                 headers.insert("Connection".to_string(), "close".to_string());
                 let response =
@@ -62,11 +63,7 @@ impl Server {
                 middleware().await;
             }
 
-            let handler = self.handlers.get(&key);
-
-            let response = handler.unwrap()();
-
-            s.write_all(&response.to_bytes()).await.unwrap();
+            method_handle.unwrap().handle(&mut s).await;
         }
     }
 }
