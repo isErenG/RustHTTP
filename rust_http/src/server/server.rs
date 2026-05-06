@@ -42,9 +42,9 @@ impl Server {
     }
 
     pub async fn listen(&mut self) {
-        let (mut s, _) = self.listener.accept().await.unwrap();
-
         loop {
+            let (mut s, _) = self.listener.accept().await.unwrap();
+
             let request = parse_http(&mut s).await;
             let key = format!("{}:{}", request.request_method, request.path);
 
