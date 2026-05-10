@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Error;
 
+#[derive(Clone)]
 pub struct Request {
     pub path: String,
     pub request_method: RequestMethod,
@@ -24,7 +25,7 @@ impl Request {
         }
     }
 }
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum RequestMethod {
     GET,
     POST,

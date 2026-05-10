@@ -1,42 +1,38 @@
 # RustHTTP
 
-A from-scratch HTTP/1.1 server written in Rust. No frameworks — just raw TCP sockets, manual byte parsing, and the standard library.
+A from-scratch HTTP/1.1 server written in Rust. No web frameworks — just TCP sockets, manual byte-level parsing, and the standard library + `tokio` for async I/O.
 
-The goal is to understand how HTTP works at the byte level, and to get hands-on with Rust's ownership model and type system.
+The point isn't to ship yet another web server; it's to understand what `axum`, `actix`, or Go's `net/http` are actually doing underneath. Every layer (request line parsing, header decoding, response serialization, the read buffer, the routing table) is hand-written so the bytes on the wire are never abstracted away.
 
----
+## What's in here
 
-## Roadmap
-
-### V1 — Bare TCP to HTTP
-- Open a TCP listener on a port
-- Read raw bytes from the socket
-- Manually parse request line and headers
-- Send a hardcoded HTTP response back
-
-### V2 — Routing + Responses
-- Simple router matching method + path to a handler
-- Structured `HttpRequest` and `HttpResponse` types
-- Proper status codes (200, 404, 405)
-- Parse request body for POST requests
-
-### V3 — Static File Serving
-- Serve files from a `/public` directory
-- Detect content type from file extension
-- Return 404 if file not found
-
-### V4 — Concurrency
-- Introduce `tokio` for async I/O
-- Handle multiple simultaneous connections
-
----
+- **TCP accept loop** — `tokio::net::TcpListener` on `127.0.0.1:7878`.
+- **Custom buffered reader** — a hand-rolled `AsyncRead` + `AsyncBufRead` implementation (`reader/reader.rs`) that owns its own 1 KiB buffer and drives `poll_read` directly. This is the part that teaches you what `BufReader` is doing.
+- **HTTP/1.1 parser** — reads the request line, parses headers into a `HashMap`, and pulls the body using `Content-Length`.
+- **Typed request/response** — `Request`, `Response`, `RequestMethod`, and `StatusCode` types serialize back to bytes.
+- **Pluggable handlers** — register a handler per `(method, path)` with `Server::attach_handler`.
+- **Middleware hooks** — async closures that run before the matched handler.
 
 ## Running
 
 ```bash
+cd rust_http
 cargo run
 ```
 
 ```bash
-curl -v http://localhost:7878
+curl -v http://localhost:7878/api
+```
+
+## Layout
+
+```
+rust_http/src/
+├── main.rs          # wires up the server, registers handlers/middleware
+├── server/          # accept loop + dispatch
+├── handler/         # Handler struct (method + path + closure)
+├── http/parser.rs   # request line, header, and body parsing
+├── reader/reader.rs # custom AsyncRead/AsyncBufRead wrapper
+├── schemas/         # Request, Response, StatusCode, RequestMethod
+└── utils/           # debug printing helpers
 ```

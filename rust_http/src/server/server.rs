@@ -1,14 +1,16 @@
 use crate::handler::Handler;
 use crate::http::parse_http;
+use crate::middleware::{self, Middleware};
 use crate::schemas::{Response, StatusCode};
-use std::{collections::HashMap, pin::Pin};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
 pub struct Server {
     listener: TcpListener,
-    handlers: Vec<Handler>,
-    middleware: Vec<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>>>>,
+    handlers: Arc<Vec<Handler>>,
+    middleware: Vec<Middleware>,
 }
 
 impl Server {
@@ -20,50 +22,54 @@ impl Server {
 
         Server {
             listener,
-            handlers: Vec::new(),
+            handlers: Arc::new(Vec::new()),
             middleware: Vec::new(),
         }
     }
 
-    pub fn attach_middleware(&mut self, m: Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>>>) {
+    pub fn attach_middleware(&mut self, m: Middleware) {
         self.middleware.push(m);
     }
 
     pub fn attach_handler(&mut self, handler: Handler) {
-        self.handlers.push(handler);
+        Arc::make_mut(&mut self.handlers).push(handler);
     }
 
     pub async fn listen(&mut self) {
+        let middlewares = Arc::new(std::mem::take(&mut self.middleware));
         loop {
             let (mut s, _) = self.listener.accept().await.unwrap();
+            let handlers = Arc::clone(&self.handlers);
+            let middlewares = Arc::clone(&middlewares);
+            tokio::spawn(async move {
+                let request = parse_http(&mut s).await;
+                let key = format!("{}:{}", request.request_method, request.path);
 
-            let request = parse_http(&mut s).await;
-            let key = format!("{}:{}", request.request_method, request.path);
-
-            let mut method_handle: Option<&Handler> = None;
-            for handler in &self.handlers {
-                if handler.get_key() == key {
-                    method_handle = Some(handler);
-                    break;
+                let mut method_handle: Option<&Handler> = None;
+                for handler in handlers.iter() {
+                    if handler.get_key() == key {
+                        method_handle = Some(handler);
+                        break;
+                    }
+                    method_handle = None;
                 }
-                method_handle = None;
-            }
 
-            if method_handle.is_none() {
-                let mut headers = HashMap::new();
-                headers.insert("Connection".to_string(), "close".to_string());
-                let response =
-                    Response::new(StatusCode::Ok, headers, Some("Not found\n".to_string()));
+                if method_handle.is_none() {
+                    let mut headers = HashMap::new();
+                    headers.insert("Connection".to_string(), "close".to_string());
+                    let response =
+                        Response::new(StatusCode::Ok, headers, Some("Not found\n".to_string()));
 
-                s.write_all(&response.to_bytes()).await.unwrap();
-                continue;
-            }
+                    s.write_all(&response.to_bytes()).await.unwrap();
+                    return;
+                }
 
-            for middleware in &self.middleware {
-                middleware().await;
-            }
+                for m in middlewares.iter() {
+                    m().await;
+                }
 
-            method_handle.unwrap().handle(&mut s).await;
+                method_handle.unwrap().handle(&mut s).await;
+            });
         }
     }
 }

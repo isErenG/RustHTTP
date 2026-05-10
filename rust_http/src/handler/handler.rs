@@ -1,18 +1,20 @@
+use std::{pin::Pin, sync::Arc};
+
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use crate::schemas::{RequestMethod, Response};
 
+#[derive(Clone)]
 pub struct Handler {
     method: RequestMethod,
     path: String,
-    handler: Box<dyn Fn() -> Response>,
+    handler: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Response> + Send>> + Send + Sync>,
 }
-
 impl Handler {
     pub fn create(
         method: RequestMethod,
         path: String,
-        handler: Box<dyn Fn() -> Response>,
+        handler: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Response> + Send>> + Send + Sync>,
     ) -> Handler {
         Handler {
             method,
@@ -22,7 +24,7 @@ impl Handler {
     }
 
     pub async fn handle(&self, stream: &mut TcpStream) {
-        let response = (self.handler)();
+        let response = (self.handler)().await;
         stream.write_all(&response.to_bytes()).await.unwrap();
     }
 
